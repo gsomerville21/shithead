@@ -27,11 +27,14 @@ const App: React.FC = () => {
   // Initialize game state
   React.useEffect(() => {
     const initialState = createGameState(['player1', 'player2'], defaultConfig);
+    // Set initial phase to SWAP
+    initialState.phase = GamePhase.SWAP;
     setGameState(initialState);
   }, []);
 
   const handleCardClick = (card: Card) => {
     if (!gameState) return;
+    console.log('Card clicked:', card); // Add debugging
 
     // Handle card selection based on game phase
     if (gameState.phase === GamePhase.SWAP) {
@@ -39,6 +42,8 @@ const App: React.FC = () => {
       const player = gameState.players.get(currentPlayerId)!;
       const isHandCard = player.hand.some((c) => c.id === card.id);
       const isFaceUpCard = player.faceUpCards.some((c) => c.id === card.id);
+
+      if (!isHandCard && !isFaceUpCard) return; // Only allow selecting hand or face-up cards
 
       setSelectedCards((prev) => {
         // If card is already selected, remove it
@@ -52,7 +57,7 @@ const App: React.FC = () => {
           if (existingHandCard) {
             return [...prev.filter((c) => c.id !== existingHandCard.id), card];
           }
-          return [...prev, card];
+          return [...prev, card].slice(0, 2); // Limit to 2 cards
         }
 
         // If selecting a face-up card
@@ -63,17 +68,33 @@ const App: React.FC = () => {
           if (existingFaceUpCard) {
             return [...prev.filter((c) => c.id !== existingFaceUpCard.id), card];
           }
-          return [...prev, card];
+          return [...prev, card].slice(0, 2); // Limit to 2 cards
         }
 
         return prev;
       });
-    } else if (gameState.phase === GamePhase.PLAY) {
+    } else if (gameState.phase === GamePhase.PLAY && gameState.currentPlayer === currentPlayerId) {
       // In play phase, allow selecting multiple cards of the same rank
+      const player = gameState.players.get(currentPlayerId)!;
+      
+      // Validate card can be selected based on hand/face-up/face-down rules
+      const canSelectCard = (
+        (player.hand.length > 0 && player.hand.some(c => c.id === card.id)) ||
+        (player.hand.length === 0 && player.faceUpCards.length > 0 && player.faceUpCards.some(c => c.id === card.id)) ||
+        (player.hand.length === 0 && player.faceUpCards.length === 0 && player.faceDownCards.some(c => c.id === card.id))
+      );
+
+      if (!canSelectCard) return;
+
       setSelectedCards((prev) => {
         // If card is already selected, remove it
         if (prev.some((c) => c.id === card.id)) {
           return prev.filter((c) => c.id !== card.id);
+        }
+
+        // For face-down cards, only allow one at a time
+        if (player.hand.length === 0 && player.faceUpCards.length === 0) {
+          return [card];
         }
 
         // Only allow selecting cards of the same rank
@@ -102,7 +123,7 @@ const App: React.FC = () => {
       setSelectedCards([]);
     } catch (error) {
       console.error('Failed to play cards:', error);
-      // In a real app, show error to user
+      // TODO: Add error toast notification here
     }
   };
 
@@ -121,7 +142,7 @@ const App: React.FC = () => {
       setSelectedCards([]);
     } catch (error) {
       console.error('Failed to pickup pile:', error);
-      // In a real app, show error to user
+      // TODO: Add error toast notification here
     }
   };
 
@@ -141,7 +162,7 @@ const App: React.FC = () => {
       setSelectedCards([]);
     } catch (error) {
       console.error('Failed to swap cards:', error);
-      // In a real app, show error to user
+      // TODO: Add error toast notification here
     }
   };
 
@@ -157,9 +178,10 @@ const App: React.FC = () => {
 
       const newState = processGameAction(gameState, action);
       setGameState(newState);
+      setSelectedCards([]);
     } catch (error) {
       console.error('Failed to confirm ready:', error);
-      // In a real app, show error to user
+      // TODO: Add error toast notification here
     }
   };
 
@@ -197,6 +219,13 @@ const App: React.FC = () => {
           <p className="mt-2">Winner: {gameState.winner}</p>
         </div>
       )}
+
+      {/* Debug info */}
+      <div className="absolute bottom-4 right-4 bg-black/50 text-white p-4 rounded-lg text-sm">
+        <div>Phase: {gameState.phase}</div>
+        <div>Current Player: {gameState.currentPlayer}</div>
+        <div>Selected Cards: {selectedCards.length}</div>
+      </div>
     </div>
   );
 };
