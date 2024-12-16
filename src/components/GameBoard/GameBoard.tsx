@@ -12,22 +12,30 @@ export interface GameBoardProps {
   className?: string;
 }
 
-const PLAYER_POSITIONS = {
+type Position = {
+  top?: string;
+  bottom?: string;
+  left?: string;
+  right?: string;
+  rotate: number;
+};
+
+const PLAYER_POSITIONS: Record<number, Position[]> = {
   2: [
-    { top: '8%', left: '50%', rotate: 0 },      // North
-    { bottom: '15%', left: '50%', rotate: 180 }  // South
+    { top: '8%', left: '50%', rotate: 0 }, // North
+    { bottom: '2%', left: '50%', rotate: 180 }, // South (current player)
   ],
   3: [
-    { top: '8%', left: '50%', rotate: 0 },      // North
-    { bottom: '30%', right: '8%', rotate: 120 }, // Southeast
-    { bottom: '30%', left: '8%', rotate: -120 }  // Southwest
+    { top: '8%', left: '50%', rotate: 0 }, // North
+    { bottom: '25%', right: '8%', rotate: 120 }, // Southeast
+    { bottom: '25%', left: '8%', rotate: -120 }, // Southwest
   ],
   4: [
-    { top: '8%', left: '50%', rotate: 0 },      // North
-    { left: '8%', top: '50%', rotate: -90 },    // West
-    { bottom: '15%', left: '50%', rotate: 180 }, // South
-    { right: '8%', top: '50%', rotate: 90 }     // East
-  ]
+    { top: '8%', left: '50%', rotate: 0 }, // North
+    { left: '8%', top: '50%', rotate: -90 }, // West
+    { bottom: '2%', left: '50%', rotate: 180 }, // South (current player)
+    { right: '8%', top: '50%', rotate: 90 }, // East
+  ],
 };
 
 const PlayerArea = ({
@@ -41,23 +49,33 @@ const PlayerArea = ({
   isCurrentPlayer: boolean;
   isActivePlayer: boolean;
   onCardClick?: (card: CardType) => void;
-  position: { top?: string; bottom?: string; left?: string; right?: string; rotate: number };
+  position: Position;
 }) => {
+  // Function to transform card rotation based on player position
+  const getCardRotation = (baseRotation: number) => {
+    // Invert the player area rotation to keep cards readable
+    return -position.rotate + baseRotation;
+  };
+
+  const { rotate, ...positionStyles } = position;
+
   return (
-    <div 
+    <div
       className="absolute"
-      style={{ 
-        ...position,
-        transform: `translate(-50%, -50%) rotate(${position.rotate}deg)`
+      style={{
+        ...positionStyles,
+        transform: `translate(-50%, -50%) rotate(${rotate}deg)`,
       }}
     >
       {/* Player name badge */}
-      <div className={cn(
-        'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full',
-        isActivePlayer ? 'bg-blue-600/80' : 'bg-black/50',
-        'text-white text-sm whitespace-nowrap',
-        position.rotate > 90 || position.rotate < -90 ? 'bottom-full mb-2' : 'top-full mt-2'
-      )}>
+      <div
+        className={cn(
+          'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full',
+          isActivePlayer ? 'bg-blue-600/80' : 'bg-black/50',
+          'text-white text-sm whitespace-nowrap',
+          rotate > 90 || rotate < -90 ? 'bottom-full mb-2' : 'top-full mt-2'
+        )}
+      >
         {player.id}
       </div>
 
@@ -66,17 +84,20 @@ const PlayerArea = ({
         {/* Face down cards */}
         <div className="absolute">
           {player.faceDownCards.map((card, i) => (
-            <div 
+            <div
               key={card.id}
               className="absolute"
               style={{
                 left: `${i * 25}px`,
-                zIndex: 1
+                zIndex: 1,
+                transform: `rotate(${getCardRotation(0)}deg)`,
               }}
             >
               <Card
-                card={card}
-                selectable={isCurrentPlayer && player.hand.length === 0 && player.faceUpCards.length === 0}
+                card={{ ...card, faceUp: false }}
+                selectable={
+                  isCurrentPlayer && player.hand.length === 0 && player.faceUpCards.length === 0
+                }
                 onClick={onCardClick}
               />
             </div>
@@ -86,16 +107,17 @@ const PlayerArea = ({
         {/* Face up cards */}
         <div className="absolute" style={{ top: '35px' }}>
           {player.faceUpCards.map((card, i) => (
-            <div 
+            <div
               key={card.id}
               className="absolute"
               style={{
                 left: `${i * 25}px`,
-                zIndex: 2
+                zIndex: 2,
+                transform: `rotate(${getCardRotation(0)}deg)`,
               }}
             >
               <Card
-                card={card}
+                card={{ ...card, faceUp: true }}
                 selectable={isCurrentPlayer && player.hand.length === 0}
                 onClick={onCardClick}
               />
@@ -106,16 +128,17 @@ const PlayerArea = ({
         {/* Hand cards */}
         <div className="absolute" style={{ top: '70px' }}>
           {player.hand.map((card, i) => (
-            <div 
+            <div
               key={card.id}
               className="absolute transition-transform hover:-translate-y-2"
               style={{
                 left: `${i * 25}px`,
-                zIndex: 3
+                zIndex: 3,
+                transform: `rotate(${getCardRotation(0)}deg)`,
               }}
             >
               <Card
-                card={card}
+                card={{ ...card, faceUp: isCurrentPlayer }}
                 selectable={isCurrentPlayer}
                 onClick={onCardClick}
               />
@@ -134,15 +157,26 @@ const GameBoard = ({
   className,
 }: GameBoardProps): React.ReactElement => {
   const players = Array.from(gameState.players.values());
-  const positions = PLAYER_POSITIONS[players.length as keyof typeof PLAYER_POSITIONS] || [];
+  const positions = PLAYER_POSITIONS[players.length] || [];
+
+  // Reorder players to ensure current player is at the bottom position
+  const orderedPlayers = React.useMemo(() => {
+    const currentPlayerIndex = players.findIndex((p) => p.id === currentPlayerId);
+    if (currentPlayerIndex === -1) return players;
+
+    // Rotate array so current player is last (bottom position)
+    return [...players.slice(currentPlayerIndex + 1), ...players.slice(0, currentPlayerIndex + 1)];
+  }, [players, currentPlayerId]);
 
   return (
-    <div className={cn(
-      'relative w-full',
-      // Account for header and footer space
-      'h-[calc(100vh-96px)] mt-12 mb-20',
-      className
-    )}>
+    <div
+      className={cn(
+        'relative w-full',
+        // Account for header and footer space
+        'h-[calc(100vh-96px)] mt-12 mb-20',
+        className
+      )}
+    >
       {/* Game table */}
       <div className="absolute inset-4 rounded-[35%] bg-green-800 border-8 border-[#543021] shadow-lg">
         {/* Center play area */}
@@ -156,7 +190,7 @@ const GameBoard = ({
                   className="absolute"
                   style={{
                     top: `${-i * 2}px`,
-                    left: `${-i * 2}px`
+                    left: `${-i * 2}px`,
                   }}
                 >
                   <Card
@@ -186,7 +220,7 @@ const GameBoard = ({
                 initial={{ scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 style={{
-                  transform: `rotate(${Math.random() * 20 - 10}deg)`
+                  transform: `rotate(${Math.random() * 20 - 10}deg)`,
                 }}
               >
                 <Card card={card} />
@@ -196,7 +230,7 @@ const GameBoard = ({
         </div>
 
         {/* Players */}
-        {players.map((player, i) => (
+        {orderedPlayers.map((player, i) => (
           <PlayerArea
             key={player.id}
             player={player}
