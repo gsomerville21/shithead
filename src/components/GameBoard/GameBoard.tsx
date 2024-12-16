@@ -14,19 +14,19 @@ export interface GameBoardProps {
 
 const PLAYER_POSITIONS = {
   2: [
-    { top: '5%', left: '50%', rotate: 0 },      // North
-    { bottom: '5%', left: '50%', rotate: 180 }  // South
+    { top: '8%', left: '50%', rotate: 0 },      // North
+    { bottom: '15%', left: '50%', rotate: 180 }  // South
   ],
   3: [
-    { top: '5%', left: '50%', rotate: 0 },      // North
-    { bottom: '25%', right: '5%', rotate: 120 }, // Southeast
-    { bottom: '25%', left: '5%', rotate: -120 }  // Southwest
+    { top: '8%', left: '50%', rotate: 0 },      // North
+    { bottom: '30%', right: '8%', rotate: 120 }, // Southeast
+    { bottom: '30%', left: '8%', rotate: -120 }  // Southwest
   ],
   4: [
-    { top: '5%', left: '50%', rotate: 0 },      // North
-    { left: '5%', top: '50%', rotate: -90 },    // West
-    { bottom: '5%', left: '50%', rotate: 180 }, // South
-    { right: '5%', top: '50%', rotate: 90 }     // East
+    { top: '8%', left: '50%', rotate: 0 },      // North
+    { left: '8%', top: '50%', rotate: -90 },    // West
+    { bottom: '15%', left: '50%', rotate: 180 }, // South
+    { right: '8%', top: '50%', rotate: 90 }     // East
   ]
 };
 
@@ -36,36 +36,29 @@ const PlayerArea = ({
   isActivePlayer,
   onCardClick,
   position,
-  phase
 }: {
   player: PlayerState;
   isCurrentPlayer: boolean;
   isActivePlayer: boolean;
   onCardClick?: (card: CardType) => void;
   position: { top?: string; bottom?: string; left?: string; right?: string; rotate: number };
-  phase: string;
 }) => {
   return (
     <div 
       className="absolute"
       style={{ 
         ...position,
-        transform: `rotate(${position.rotate}deg)`
+        transform: `translate(-50%, -50%) rotate(${position.rotate}deg)`
       }}
     >
-      {/* Player name and status */}
+      {/* Player name badge */}
       <div className={cn(
         'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full',
-        isActivePlayer ? 'bg-blue-600' : 'bg-black/50',
-        'text-white text-sm whitespace-nowrap z-10',
+        isActivePlayer ? 'bg-blue-600/80' : 'bg-black/50',
+        'text-white text-sm whitespace-nowrap',
         position.rotate > 90 || position.rotate < -90 ? 'bottom-full mb-2' : 'top-full mt-2'
       )}>
         {player.id}
-        {phase === 'SWAP' && isCurrentPlayer && (
-          <span className="ml-2 text-xs bg-yellow-500 px-2 py-0.5 rounded-full">
-            Swap
-          </span>
-        )}
       </div>
 
       {/* Cards area */}
@@ -77,7 +70,7 @@ const PlayerArea = ({
               key={card.id}
               className="absolute"
               style={{
-                left: `${i * 20}px`,
+                left: `${i * 25}px`,
                 zIndex: 1
               }}
             >
@@ -91,13 +84,13 @@ const PlayerArea = ({
         </div>
 
         {/* Face up cards */}
-        <div className="absolute" style={{ top: '30px' }}>
+        <div className="absolute" style={{ top: '35px' }}>
           {player.faceUpCards.map((card, i) => (
             <div 
               key={card.id}
               className="absolute"
               style={{
-                left: `${i * 20}px`,
+                left: `${i * 25}px`,
                 zIndex: 2
               }}
             >
@@ -111,13 +104,13 @@ const PlayerArea = ({
         </div>
 
         {/* Hand cards */}
-        <div className="absolute" style={{ top: '60px' }}>
+        <div className="absolute" style={{ top: '70px' }}>
           {player.hand.map((card, i) => (
             <div 
               key={card.id}
               className="absolute transition-transform hover:-translate-y-2"
               style={{
-                left: `${i * 20}px`,
+                left: `${i * 25}px`,
                 zIndex: 3
               }}
             >
@@ -144,7 +137,12 @@ const GameBoard = ({
   const positions = PLAYER_POSITIONS[players.length as keyof typeof PLAYER_POSITIONS] || [];
 
   return (
-    <div className={cn('relative w-full h-full min-h-[800px]', className)}>
+    <div className={cn(
+      'relative w-full',
+      // Account for header and footer space
+      'h-[calc(100vh-96px)] mt-12 mb-20',
+      className
+    )}>
       {/* Game table */}
       <div className="absolute inset-4 rounded-[35%] bg-green-800 border-8 border-[#543021] shadow-lg">
         {/* Center play area */}
@@ -206,7 +204,6 @@ const GameBoard = ({
             isActivePlayer={player.id === gameState.currentPlayer}
             onCardClick={onCardClick}
             position={positions[i]}
-            phase={gameState.phase}
           />
         ))}
       </div>

@@ -99,7 +99,7 @@ const ActionPrompt = ({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
         className={cn(
-          'flex flex-col items-center gap-4 bg-black bg-opacity-50 rounded-lg p-4',
+          'fixed top-0 left-0 right-0 flex flex-col items-center gap-4 bg-black/80 py-2 px-4',
           className
         )}
       >

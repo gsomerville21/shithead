@@ -21,7 +21,6 @@ const TurnIndicator = ({
   const isLowTime = timeLeft <= maxTime * 0.25;
   const isCriticalTime = timeLeft <= maxTime * 0.1;
 
-  // Format time as MM:SS
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.ceil(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -32,7 +31,7 @@ const TurnIndicator = ({
   return (
     <div
       className={cn(
-        'flex flex-col items-center gap-2 bg-black bg-opacity-50 rounded-lg p-4',
+        'fixed top-2 right-4 flex items-center gap-4 bg-black/80 rounded-lg px-4 py-2',
         className
       )}
     >
@@ -48,60 +47,52 @@ const TurnIndicator = ({
         </motion.div>
       </AnimatePresence>
 
-      <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="w-32 flex flex-col gap-1">
+        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+          <motion.div
+            className={cn(
+              'h-full rounded-full',
+              isCriticalTime ? 'bg-red-500' : isLowTime ? 'bg-yellow-500' : 'bg-green-500'
+            )}
+            initial={{ width: '100%' }}
+            animate={{
+              width: `${timePercentage}%`,
+              scale: isCriticalTime ? [1, 1.1, 1] : 1,
+            }}
+            transition={{
+              width: { duration: 0.3 },
+              scale: isCriticalTime
+                ? {
+                    duration: 0.5,
+                    repeat: Infinity,
+                    repeatType: 'reverse',
+                  }
+                : undefined,
+            }}
+          />
+        </div>
+
         <motion.div
           className={cn(
-            'h-full rounded-full',
-            isCriticalTime ? 'bg-red-500' : isLowTime ? 'bg-yellow-500' : 'bg-green-500'
+            'text-sm font-medium text-center',
+            isCriticalTime ? 'text-red-300' : isLowTime ? 'text-yellow-300' : 'text-white'
           )}
-          initial={{ width: '100%' }}
-          animate={{
-            width: `${timePercentage}%`,
-            scale: isCriticalTime ? [1, 1.1, 1] : 1,
-          }}
-          transition={{
-            width: { duration: 0.3 },
-            scale: isCriticalTime
+          animate={
+            isCriticalTime
               ? {
-                  duration: 0.5,
-                  repeat: Infinity,
-                  repeatType: 'reverse',
+                  scale: [1, 1.1, 1],
+                  transition: {
+                    duration: 0.5,
+                    repeat: Infinity,
+                    repeatType: 'reverse',
+                  },
                 }
-              : undefined,
-          }}
-        />
-      </div>
-
-      <motion.div
-        className={cn(
-          'text-sm font-medium',
-          isCriticalTime ? 'text-red-300' : isLowTime ? 'text-yellow-300' : 'text-white'
-        )}
-        animate={
-          isCriticalTime
-            ? {
-                scale: [1, 1.1, 1],
-                transition: {
-                  duration: 0.5,
-                  repeat: Infinity,
-                  repeatType: 'reverse',
-                },
-              }
-            : undefined
-        }
-      >
-        {formatTime(timeLeft)}
-      </motion.div>
-
-      {isLowTime && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={cn('text-xs font-medium', isCriticalTime ? 'text-red-300' : 'text-yellow-300')}
+              : undefined
+          }
         >
-          {isCriticalTime ? 'Time almost up!' : 'Running out of time!'}
+          {formatTime(timeLeft)}
         </motion.div>
-      )}
+      </div>
     </div>
   );
 };
