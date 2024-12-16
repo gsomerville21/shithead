@@ -3,7 +3,7 @@ import GameBoard from './components/GameBoard/GameBoard';
 import GameFlow from './components/GameFlow/GameFlow';
 import { GameState, GamePhase, GameConfig, ActionType } from './types/game';
 import { Card } from './types/card-types';
-import { createGameState, processGameAction } from './core/game-state';
+import { GameService } from './services/gameService';
 
 const defaultConfig: GameConfig = {
   maxPlayers: 2,
@@ -23,18 +23,34 @@ const App: React.FC = () => {
   const [gameState, setGameState] = React.useState<GameState | null>(null);
   const [selectedCards, setSelectedCards] = React.useState<Card[]>([]);
   const [currentPlayerId] = React.useState('player1'); // In multiplayer this would come from auth
+  const gameService = React.useRef(new GameService('game1', 2));
 
   // Initialize game state
   React.useEffect(() => {
-    const initialState = createGameState(['player1', 'player2'], defaultConfig);
-    // Set initial phase to SWAP
-    initialState.phase = GamePhase.SWAP;
+    const initialState = gameService.current.initializeGame(1); // Initialize with 1 bot
     setGameState(initialState);
   }, []);
 
+  // Process bot turns
+  React.useEffect(() => {
+    if (!gameState) return;
+
+    // If current player is a bot and game is in PLAY phase
+    if (gameState.phase === GamePhase.PLAY) {
+      const currentPlayer = gameState.players.get(gameState.currentPlayer);
+      if (currentPlayer?.isBot) {
+        // Add a small delay to make bot moves visible
+        const timeoutId = setTimeout(() => {
+          const newState = gameService.current.processBotTurn(gameState);
+          setGameState(newState);
+        }, 1000);
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [gameState]);
+
   const handleCardClick = (card: Card) => {
     if (!gameState) return;
-    console.log('Card clicked:', card); // Add debugging
 
     // Handle card selection based on game phase
     if (gameState.phase === GamePhase.SWAP) {
@@ -76,13 +92,16 @@ const App: React.FC = () => {
     } else if (gameState.phase === GamePhase.PLAY && gameState.currentPlayer === currentPlayerId) {
       // In play phase, allow selecting multiple cards of the same rank
       const player = gameState.players.get(currentPlayerId)!;
-      
+
       // Validate card can be selected based on hand/face-up/face-down rules
-      const canSelectCard = (
-        (player.hand.length > 0 && player.hand.some(c => c.id === card.id)) ||
-        (player.hand.length === 0 && player.faceUpCards.length > 0 && player.faceUpCards.some(c => c.id === card.id)) ||
-        (player.hand.length === 0 && player.faceUpCards.length === 0 && player.faceDownCards.some(c => c.id === card.id))
-      );
+      const canSelectCard =
+        (player.hand.length > 0 && player.hand.some((c) => c.id === card.id)) ||
+        (player.hand.length === 0 &&
+          player.faceUpCards.length > 0 &&
+          player.faceUpCards.some((c) => c.id === card.id)) ||
+        (player.hand.length === 0 &&
+          player.faceUpCards.length === 0 &&
+          player.faceDownCards.some((c) => c.id === card.id));
 
       if (!canSelectCard) return;
 
@@ -118,7 +137,7 @@ const App: React.FC = () => {
         timestamp: Date.now(),
       };
 
-      const newState = processGameAction(gameState, action);
+      const newState = gameService.current.processAction(gameState, action);
       setGameState(newState);
       setSelectedCards([]);
     } catch (error) {
@@ -137,7 +156,7 @@ const App: React.FC = () => {
         timestamp: Date.now(),
       };
 
-      const newState = processGameAction(gameState, action);
+      const newState = gameService.current.processAction(gameState, action);
       setGameState(newState);
       setSelectedCards([]);
     } catch (error) {
@@ -157,7 +176,7 @@ const App: React.FC = () => {
         timestamp: Date.now(),
       };
 
-      const newState = processGameAction(gameState, action);
+      const newState = gameService.current.processAction(gameState, action);
       setGameState(newState);
       setSelectedCards([]);
     } catch (error) {
@@ -176,7 +195,7 @@ const App: React.FC = () => {
         timestamp: Date.now(),
       };
 
-      const newState = processGameAction(gameState, action);
+      const newState = gameService.current.processAction(gameState, action);
       setGameState(newState);
       setSelectedCards([]);
     } catch (error) {
@@ -203,13 +222,11 @@ const App: React.FC = () => {
         onPickup={handlePickupPile}
         onSwapConfirm={handleSwapConfirm}
         onReadyConfirm={handleReadyConfirm}
-        className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10"
       />
       <GameBoard
         gameState={gameState}
         onCardClick={handleCardClick}
         currentPlayerId={currentPlayerId}
-        className="w-full h-full"
       />
 
       {/* Game status messages */}
@@ -225,6 +242,7 @@ const App: React.FC = () => {
         <div>Phase: {gameState.phase}</div>
         <div>Current Player: {gameState.currentPlayer}</div>
         <div>Selected Cards: {selectedCards.length}</div>
+        <div>Bot Turn: {gameState.players.get(gameState.currentPlayer)?.isBot ? 'Yes' : 'No'}</div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { Card } from './card-types';
+export type { Card } from './card-types';
 
 export enum GamePhase {
   SETUP = 'SETUP',
@@ -30,6 +31,7 @@ export interface PlayerState {
   connected: boolean;
   ready: boolean;
   timeoutWarnings: number;
+  isBot: boolean;
 }
 
 export interface GameConfig {

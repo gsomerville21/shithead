@@ -70,13 +70,19 @@ const PlayerArea = ({
       {/* Player name badge */}
       <div
         className={cn(
-          'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full',
+          'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full flex items-center gap-2',
           isActivePlayer ? 'bg-blue-600/80' : 'bg-black/50',
           'text-white text-sm whitespace-nowrap',
           rotate > 90 || rotate < -90 ? 'bottom-full mb-2' : 'top-full mt-2'
         )}
       >
         {player.id}
+        {player.isBot && (
+          <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-100 rounded">
+            BOT
+          </span>
+        )}
+        {isActivePlayer && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
       </div>
 
       {/* Cards area */}
