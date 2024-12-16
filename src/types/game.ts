@@ -5,7 +5,21 @@ export enum GamePhase {
   SWAP = 'SWAP',
   PLAY = 'PLAY',
   ROUND_END = 'ROUND_END',
-  GAME_END = 'GAME_END'
+  GAME_END = 'GAME_END',
+}
+
+export enum ActionType {
+  PLAY_CARDS = 'PLAY_CARDS',
+  PICKUP_PILE = 'PICKUP_PILE',
+  SWAP_CARDS = 'SWAP_CARDS',
+  CONFIRM_READY = 'CONFIRM_READY',
+}
+
+export enum SpecialEffectType {
+  BURN = 'BURN',
+  SKIP = 'SKIP',
+  RESET = 'RESET',
+  TRANSPARENT = 'TRANSPARENT',
 }
 
 export interface PlayerState {
@@ -43,12 +57,12 @@ export interface GameRules {
 }
 
 export interface SpecialEffect {
-  type: string;
+  type: SpecialEffectType;
   timestamp: number;
 }
 
 export interface GameAction {
-  type: string;
+  type: ActionType;
   playerId: string;
   cards?: Card[];
   timestamp: number;

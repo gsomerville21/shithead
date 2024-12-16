@@ -1,124 +1,202 @@
-import React, { useState } from 'react';
-import GameBoard from './components/GameBoard';
-import GameFlow from './components/GameFlow';
-import { GameState, GamePhase } from './types/game';
-import { Card, Suit, Rank, CardLocation } from './types/card-types';
+import * as React from 'react';
+import GameBoard from './components/GameBoard/GameBoard';
+import GameFlow from './components/GameFlow/GameFlow';
+import { GameState, GamePhase, GameConfig, ActionType } from './types/game';
+import { Card } from './types/card-types';
+import { createGameState, processGameAction } from './core/game-state';
 
-// Create a mock game state for development
-const createMockGameState = (): GameState => {
-  const mockCard: Card = {
-    id: '1',
-    suit: Suit.HEARTS,
-    rank: Rank.ACE,
-    location: CardLocation.HAND,
-    faceUp: true,
-    position: 0
-  };
-
-  return {
-    id: 'test-game',
-    phase: GamePhase.PLAY,
-    players: new Map([
-      ['player1', {
-        id: 'player1',
-        hand: [
-          { ...mockCard, id: '1', suit: Suit.HEARTS },
-          { ...mockCard, id: '2', suit: Suit.DIAMONDS },
-          { ...mockCard, id: '3', suit: Suit.SPADES }
-        ],
-        faceUpCards: [
-          { ...mockCard, id: '4', suit: Suit.CLUBS, faceUp: true },
-          { ...mockCard, id: '5', suit: Suit.HEARTS, faceUp: true }
-        ],
-        faceDownCards: [
-          { ...mockCard, id: '6', faceUp: false },
-          { ...mockCard, id: '7', faceUp: false }
-        ],
-        connected: true,
-        ready: true,
-        timeoutWarnings: 0
-      }],
-      ['player2', {
-        id: 'player2',
-        hand: [{ ...mockCard, id: '8' }],
-        faceUpCards: [{ ...mockCard, id: '9', faceUp: true }],
-        faceDownCards: [{ ...mockCard, id: '10', faceUp: false }],
-        connected: true,
-        ready: true,
-        timeoutWarnings: 0
-      }]
-    ]),
-    currentPlayer: 'player1',
-    nextPlayer: 'player2',
-    deck: [
-      { ...mockCard, id: '11', faceUp: false },
-      { ...mockCard, id: '12', faceUp: false }
-    ],
-    pile: [
-      { ...mockCard, id: '13', location: CardLocation.PILE },
-      { ...mockCard, id: '14', location: CardLocation.PILE }
-    ],
-    lastAction: null,
-    specialEffects: [],
-    winner: null,
-    config: {
-      maxPlayers: 2,
-      startingCards: { hand: 3, faceUp: 3, faceDown: 3 },
-      timeouts: { turn: 30000, swap: 60000, reconnect: 120000 },
-      rules: {
-        allowMultiples: true,
-        burnOnFour: true,
-        transparentEights: true,
-        jackSkips: true,
-        twoReset: true
-      },
-      hostId: 'player1'
-    },
-    timestamp: Date.now(),
-    moveHistory: []
-  };
+const defaultConfig: GameConfig = {
+  maxPlayers: 2,
+  startingCards: { hand: 3, faceUp: 3, faceDown: 3 },
+  timeouts: { turn: 30000, swap: 60000, reconnect: 120000 },
+  rules: {
+    allowMultiples: true,
+    burnOnFour: true,
+    transparentEights: true,
+    jackSkips: true,
+    twoReset: true,
+  },
+  hostId: 'player1',
 };
 
 const App: React.FC = () => {
-  const [gameState, setGameState] = useState<GameState>(createMockGameState());
-  const [selectedCards, setSelectedCards] = useState<Card[]>([]);
+  const [gameState, setGameState] = React.useState<GameState | null>(null);
+  const [selectedCards, setSelectedCards] = React.useState<Card[]>([]);
+  const [currentPlayerId] = React.useState('player1'); // In multiplayer this would come from auth
+
+  // Initialize game state
+  React.useEffect(() => {
+    const initialState = createGameState(['player1', 'player2'], defaultConfig);
+    setGameState(initialState);
+  }, []);
 
   const handleCardClick = (card: Card) => {
-    setSelectedCards(prev => {
-      const isSelected = prev.some(c => c.id === card.id);
-      if (isSelected) {
-        return prev.filter(c => c.id !== card.id);
-      }
-      return [...prev, card];
-    });
+    if (!gameState) return;
+
+    // Handle card selection based on game phase
+    if (gameState.phase === GamePhase.SWAP) {
+      // In swap phase, only allow selecting one card from hand and one from face-up
+      const player = gameState.players.get(currentPlayerId)!;
+      const isHandCard = player.hand.some((c) => c.id === card.id);
+      const isFaceUpCard = player.faceUpCards.some((c) => c.id === card.id);
+
+      setSelectedCards((prev) => {
+        // If card is already selected, remove it
+        if (prev.some((c) => c.id === card.id)) {
+          return prev.filter((c) => c.id !== card.id);
+        }
+
+        // If selecting a hand card
+        if (isHandCard) {
+          const existingHandCard = prev.find((c) => player.hand.some((h) => h.id === c.id));
+          if (existingHandCard) {
+            return [...prev.filter((c) => c.id !== existingHandCard.id), card];
+          }
+          return [...prev, card];
+        }
+
+        // If selecting a face-up card
+        if (isFaceUpCard) {
+          const existingFaceUpCard = prev.find((c) =>
+            player.faceUpCards.some((f) => f.id === c.id)
+          );
+          if (existingFaceUpCard) {
+            return [...prev.filter((c) => c.id !== existingFaceUpCard.id), card];
+          }
+          return [...prev, card];
+        }
+
+        return prev;
+      });
+    } else if (gameState.phase === GamePhase.PLAY) {
+      // In play phase, allow selecting multiple cards of the same rank
+      setSelectedCards((prev) => {
+        // If card is already selected, remove it
+        if (prev.some((c) => c.id === card.id)) {
+          return prev.filter((c) => c.id !== card.id);
+        }
+
+        // Only allow selecting cards of the same rank
+        if (prev.length > 0 && prev[0].rank !== card.rank) {
+          return prev;
+        }
+
+        return [...prev, card];
+      });
+    }
   };
 
   const handlePlayCards = () => {
-    console.log('Playing cards:', selectedCards);
-    // Implement actual game logic here
+    if (!gameState || selectedCards.length === 0) return;
+
+    try {
+      const action = {
+        type: ActionType.PLAY_CARDS,
+        playerId: currentPlayerId,
+        cards: selectedCards,
+        timestamp: Date.now(),
+      };
+
+      const newState = processGameAction(gameState, action);
+      setGameState(newState);
+      setSelectedCards([]);
+    } catch (error) {
+      console.error('Failed to play cards:', error);
+      // In a real app, show error to user
+    }
   };
 
   const handlePickupPile = () => {
-    console.log('Picking up pile');
-    // Implement actual game logic here
+    if (!gameState) return;
+
+    try {
+      const action = {
+        type: ActionType.PICKUP_PILE,
+        playerId: currentPlayerId,
+        timestamp: Date.now(),
+      };
+
+      const newState = processGameAction(gameState, action);
+      setGameState(newState);
+      setSelectedCards([]);
+    } catch (error) {
+      console.error('Failed to pickup pile:', error);
+      // In a real app, show error to user
+    }
   };
+
+  const handleSwapConfirm = () => {
+    if (!gameState || selectedCards.length !== 2) return;
+
+    try {
+      const action = {
+        type: ActionType.SWAP_CARDS,
+        playerId: currentPlayerId,
+        cards: selectedCards,
+        timestamp: Date.now(),
+      };
+
+      const newState = processGameAction(gameState, action);
+      setGameState(newState);
+      setSelectedCards([]);
+    } catch (error) {
+      console.error('Failed to swap cards:', error);
+      // In a real app, show error to user
+    }
+  };
+
+  const handleReadyConfirm = () => {
+    if (!gameState) return;
+
+    try {
+      const action = {
+        type: ActionType.CONFIRM_READY,
+        playerId: currentPlayerId,
+        timestamp: Date.now(),
+      };
+
+      const newState = processGameAction(gameState, action);
+      setGameState(newState);
+    } catch (error) {
+      console.error('Failed to confirm ready:', error);
+      // In a real app, show error to user
+    }
+  };
+
+  if (!gameState) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-green-900">
+        <div className="text-white text-xl font-medium">Loading game...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-screen bg-green-900 overflow-hidden">
       <GameFlow
         gameState={gameState}
-        currentPlayerId="player1"
+        currentPlayerId={currentPlayerId}
         selectedCards={selectedCards}
         onPlay={handlePlayCards}
         onPickup={handlePickupPile}
+        onSwapConfirm={handleSwapConfirm}
+        onReadyConfirm={handleReadyConfirm}
         className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10"
       />
       <GameBoard
         gameState={gameState}
         onCardClick={handleCardClick}
-        currentPlayerId="player1"
+        currentPlayerId={currentPlayerId}
         className="w-full h-full"
       />
+
+      {/* Game status messages */}
+      {gameState.winner && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/75 text-white p-8 rounded-lg shadow-xl">
+          <h2 className="text-2xl font-bold">Game Over!</h2>
+          <p className="mt-2">Winner: {gameState.winner}</p>
+        </div>
+      )}
     </div>
   );
 };

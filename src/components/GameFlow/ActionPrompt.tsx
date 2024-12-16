@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../utils/classnames';
 import { GamePhase } from '../../types/game';
@@ -6,45 +6,63 @@ import { Card as CardType } from '../../types/card-types';
 
 export interface ActionPromptProps {
   phase: GamePhase;
+  prompt?: string;
   selectedCards: CardType[];
   isYourTurn: boolean;
   canPlay: boolean;
   onPlay: () => void;
   onPickup: () => void;
-  onConfirmReady?: () => void;
+  onSwapConfirm?: () => void;
+  onReadyConfirm?: () => void;
   className?: string;
 }
 
-const ActionPrompt: React.FC<ActionPromptProps> = ({
+const ActionPrompt = ({
   phase,
+  prompt,
   selectedCards,
   isYourTurn,
   canPlay,
   onPlay,
   onPickup,
-  onConfirmReady,
-  className
-}) => {
-  const getPromptMessage = () => {
-    if (!isYourTurn) return "Wait for your turn";
-    if (phase === GamePhase.SWAP) return "Swap cards or confirm ready";
-    if (selectedCards.length === 0) return "Select cards to play or pickup pile";
-    return canPlay ? "Play selected cards" : "Invalid play - try different cards";
+  onSwapConfirm,
+  onReadyConfirm,
+  className,
+}: ActionPromptProps): React.ReactElement => {
+  const getPromptMessage = (): string => {
+    if (prompt) return prompt;
+    if (!isYourTurn) return 'Wait for your turn';
+    if (phase === GamePhase.SWAP) return 'Swap cards or confirm ready';
+    if (selectedCards.length === 0) return 'Select cards to play or pickup pile';
+    return canPlay ? 'Play selected cards' : 'Invalid play - try different cards';
   };
 
-  const getActionButtons = () => {
-    if (!isYourTurn) return null;
+  const getActionButtons = (): React.ReactNode => {
+    if (!isYourTurn && phase !== GamePhase.SWAP) return null;
 
     switch (phase) {
       case GamePhase.SWAP:
         return (
-          <button
-            onClick={onConfirmReady}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            Confirm Ready
-          </button>
+          <div className="flex gap-2">
+            {selectedCards.length === 2 && onSwapConfirm && (
+              <button
+                onClick={onSwapConfirm}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              >
+                Confirm Swap
+              </button>
+            )}
+            {onReadyConfirm && (
+              <button
+                onClick={onReadyConfirm}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                Ready to Play
+              </button>
+            )}
+          </div>
         );
+
       case GamePhase.PLAY:
         return (
           <div className="flex gap-2">
@@ -68,6 +86,7 @@ const ActionPrompt: React.FC<ActionPromptProps> = ({
             </button>
           </div>
         );
+
       default:
         return null;
     }
@@ -84,9 +103,7 @@ const ActionPrompt: React.FC<ActionPromptProps> = ({
           className
         )}
       >
-        <div className="text-white text-lg">
-          {getPromptMessage()}
-        </div>
+        <div className="text-white text-lg font-medium">{getPromptMessage()}</div>
         {getActionButtons()}
       </motion.div>
     </AnimatePresence>
