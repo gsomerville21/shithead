@@ -58,9 +58,11 @@ const GameFlow = ({
     if (gameState.phase === GamePhase.PLAY) {
       if (selectedCards.length === 0) return false;
 
+      // Check if all selected cards are from the same location
       const locations = new Set(selectedCards.map((card) => card.location));
       if (locations.size !== 1) return false;
 
+      // Determine which set of cards the player should be using
       if (currentPlayer.hand.length > 0) {
         return selectedCards.every((card) => card.location === CardLocation.HAND);
       }
@@ -161,9 +163,9 @@ const GameFlow = ({
                 <>
                   <button
                     onClick={onPlay}
-                    disabled={!canPlay || selectedCards.length === 0}
+                    disabled={!canPlay}
                     className={
-                      canPlay && selectedCards.length > 0
+                      canPlay
                         ? 'px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors'
                         : 'px-4 py-2 bg-gray-600 text-gray-300 rounded cursor-not-allowed'
                     }

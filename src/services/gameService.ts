@@ -19,23 +19,12 @@ export class GameService {
   private numPlayers: number;
   private botService: BotService;
 
-  /**
-   * Creates a new instance of the game service
-   * @param {string} gameId - Unique identifier for the game
-   * @param {number} numPlayers - Number of players in the game
-   */
   constructor(gameId: string, numPlayers: number) {
     this.gameId = gameId;
     this.numPlayers = numPlayers;
     this.botService = new BotService(this);
   }
 
-  /**
-   * Processes a game action and returns the updated game state
-   * @param {GameState} state - Current game state
-   * @param {GameAction} action - Action to process
-   * @returns {GameState} Updated game state
-   */
   processAction(state: GameState, action: GameAction): GameState {
     const newState = { ...state };
     const player = newState.players.get(action.playerId);
@@ -68,12 +57,9 @@ export class GameService {
     }
   }
 
-  /**
-   * Processes playing cards
-   */
   private processPlayCards(state: GameState, player: PlayerState, cards: Card[]): GameState {
     // Validate play
-    const topCard = state.pile[state.pile.length - 1];
+    const topCard = state.pile.length > 0 ? state.pile[state.pile.length - 1] : null;
     if (!this.isValidPlay(cards, topCard)) {
       throw new Error('Invalid card play');
     }
@@ -91,8 +77,13 @@ export class GameService {
       );
     }
 
-    // Add cards to pile
-    state.pile.push(...cards);
+    // Add cards to pile with faceUp=true
+    const playedCards = cards.map((card) => ({
+      ...card,
+      faceUp: true,
+      location: CardLocation.PILE,
+    }));
+    state.pile.push(...playedCards);
 
     // Check for special effects
     if (cards.length === 4) {
@@ -151,12 +142,15 @@ export class GameService {
     return state;
   }
 
-  /**
-   * Processes picking up the pile
-   */
   private processPickupPile(state: GameState, player: PlayerState): GameState {
-    // Add pile to player's hand
-    player.hand.push(...state.pile);
+    // Add pile to player's hand with faceUp=true for visibility
+    player.hand.push(
+      ...state.pile.map((card) => ({
+        ...card,
+        faceUp: true,
+        location: CardLocation.HAND,
+      }))
+    );
     state.pile = [];
 
     // Move to next player
@@ -174,9 +168,6 @@ export class GameService {
     return state;
   }
 
-  /**
-   * Processes swapping cards during the swap phase
-   */
   private processSwapCards(state: GameState, player: PlayerState, cards: Card[]): GameState {
     const [handCard, faceUpCard] = cards;
 
@@ -190,8 +181,8 @@ export class GameService {
 
     // Perform swap
     [player.hand[handCardIndex], player.faceUpCards[faceUpCardIndex]] = [
-      player.faceUpCards[faceUpCardIndex],
-      player.hand[handCardIndex],
+      { ...player.faceUpCards[faceUpCardIndex], location: CardLocation.HAND },
+      { ...player.hand[handCardIndex], location: CardLocation.FACE_UP, faceUp: true },
     ];
 
     state.lastAction = {
@@ -204,9 +195,6 @@ export class GameService {
     return state;
   }
 
-  /**
-   * Processes confirming ready during the swap phase
-   */
   private processConfirmReady(state: GameState, player: PlayerState): GameState {
     player.ready = true;
 
@@ -224,12 +212,6 @@ export class GameService {
     return state;
   }
 
-  /**
-   * Initializes a new game state
-   * @param {number} numBots - Number of bot players to add
-   * @returns {GameState} Initial game state
-   * @throws {Error} If number of players is invalid
-   */
   initializeGame(numBots: number = 0): GameState {
     if (this.numPlayers < 2 || this.numPlayers > 4) {
       throw new Error('Invalid number of players');
@@ -291,13 +273,6 @@ export class GameService {
     return this.dealCards(gameState);
   }
 
-  /**
-   * Creates a new player state
-   * @private
-   * @param {string} id - Player identifier
-   * @param {boolean} isBot - Whether this is a bot player
-   * @returns {PlayerState} New player state
-   */
   private createPlayer(id: string, isBot: boolean): PlayerState {
     return {
       id,
@@ -311,11 +286,6 @@ export class GameService {
     };
   }
 
-  /**
-   * Creates and shuffles a new deck of cards
-   * @private
-   * @returns {Card[]} Shuffled deck of cards
-   */
   private createDeck(): Card[] {
     const deck: Card[] = [];
     Object.values(Suit).forEach((suit) => {
@@ -333,12 +303,6 @@ export class GameService {
     return this.shuffleDeck(deck);
   }
 
-  /**
-   * Shuffles an array of cards using Fisher-Yates algorithm
-   * @private
-   * @param {Card[]} deck - Array of cards to shuffle
-   * @returns {Card[]} Shuffled array of cards
-   */
   private shuffleDeck(deck: Card[]): Card[] {
     for (let i = deck.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -347,11 +311,6 @@ export class GameService {
     return deck;
   }
 
-  /**
-   * Deals initial cards to all players
-   * @param {GameState} gameState - Current game state
-   * @returns {GameState} Updated game state after dealing
-   */
   dealCards(gameState: GameState): GameState {
     const state = { ...gameState };
     state.players.forEach((player) => {
@@ -359,6 +318,7 @@ export class GameService {
       player.faceDownCards = state.deck.splice(0, 3).map((card) => ({
         ...card,
         location: CardLocation.FACE_DOWN,
+        faceUp: false,
         ownerId: player.id,
       }));
 
@@ -374,6 +334,7 @@ export class GameService {
       player.hand = state.deck.splice(0, 3).map((card) => ({
         ...card,
         location: CardLocation.HAND,
+        faceUp: true,
         ownerId: player.id,
       }));
     });
@@ -382,11 +343,6 @@ export class GameService {
     return state;
   }
 
-  /**
-   * Processes a bot's turn if current player is a bot
-   * @param {GameState} gameState - Current game state
-   * @returns {GameState} Updated game state after bot's turn
-   */
   processBotTurn(gameState: GameState): GameState {
     const currentPlayer = gameState.players.get(gameState.currentPlayer);
     if (!currentPlayer?.isBot) return gameState;
@@ -413,33 +369,22 @@ export class GameService {
     }
   }
 
-  /**
-   * Validates if a card or set of cards can be played
-   * @param {Card[]} cards - Cards to validate
-   * @param {Card | null} topCard - Current top card on pile
-   * @returns {boolean} Whether the play is valid
-   */
   isValidPlay(cards: Card[], topCard: Card | null): boolean {
-    // Special case: empty pile
-    if (!topCard) return true;
-
     // Check if all cards have same rank
     const allSameRank = cards.every((card) => card.rank === cards[0].rank);
     if (!allSameRank) return false;
 
+    // Special case: empty pile or first play
+    if (!topCard) return true;
+
     // Special cards
-    if (cards[0].rank === Rank.TWO) return true;
-    if (cards[0].rank === Rank.EIGHT) return true;
+    if (cards[0].rank === Rank.TWO) return true; // 2 can be played on anything
+    if (cards[0].rank === Rank.EIGHT) return true; // 8 is transparent
 
     // Compare with top card
     return this.getCardValue(cards[0]) >= this.getCardValue(topCard);
   }
 
-  /**
-   * Gets the numeric value of a card for comparison
-   * @param {Card} card - Card to evaluate
-   * @returns {number} Numeric value of the card
-   */
   getCardValue(card: Card): number {
     const rankValues: { [key in Rank]: number } = {
       [Rank.TWO]: 2,

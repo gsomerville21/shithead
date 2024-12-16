@@ -27,7 +27,14 @@ export class BotService {
     if (validPlays.length === 0) return []; // Pick up pile if no valid plays
 
     // Prioritize plays
-    return this.chooseBestPlay(validPlays, gameState);
+    const bestPlay = this.chooseBestPlay(validPlays, gameState);
+
+    // Ensure cards are face up when played
+    return bestPlay.map((card) => ({
+      ...card,
+      faceUp: true,
+      location: CardLocation.PILE,
+    }));
   }
 
   /**
@@ -39,7 +46,11 @@ export class BotService {
     } else if (botPlayer.faceUpCards.length > 0) {
       return botPlayer.faceUpCards;
     } else if (botPlayer.faceDownCards.length > 0) {
-      return botPlayer.faceDownCards;
+      // When playing face down cards, make them face up
+      return botPlayer.faceDownCards.map((card) => ({
+        ...card,
+        faceUp: true,
+      }));
     }
     return [];
   }

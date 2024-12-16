@@ -2,7 +2,7 @@ import * as React from 'react';
 import GameBoard from './components/GameBoard/GameBoard';
 import GameFlow from './components/GameFlow/GameFlow';
 import { GameState, GamePhase, GameConfig, ActionType } from './types/game';
-import { Card } from './types/card-types';
+import { Card, CardLocation } from './types/card-types';
 import { GameService } from './services/gameService';
 
 const defaultConfig: GameConfig = {
@@ -90,20 +90,21 @@ const App: React.FC = () => {
         return prev;
       });
     } else if (gameState.phase === GamePhase.PLAY && gameState.currentPlayer === currentPlayerId) {
-      // In play phase, allow selecting multiple cards of the same rank
+      // In play phase, handle card selection
       const player = gameState.players.get(currentPlayerId)!;
 
-      // Validate card can be selected based on hand/face-up/face-down rules
-      const canSelectCard =
-        (player.hand.length > 0 && player.hand.some((c) => c.id === card.id)) ||
-        (player.hand.length === 0 &&
-          player.faceUpCards.length > 0 &&
-          player.faceUpCards.some((c) => c.id === card.id)) ||
-        (player.hand.length === 0 &&
-          player.faceUpCards.length === 0 &&
-          player.faceDownCards.some((c) => c.id === card.id));
+      // Determine which set of cards the player should be using
+      let validCards = player.hand;
+      if (player.hand.length === 0) {
+        validCards = player.faceUpCards;
+      }
+      if (player.hand.length === 0 && player.faceUpCards.length === 0) {
+        validCards = player.faceDownCards;
+      }
 
-      if (!canSelectCard) return;
+      // Check if the clicked card is in the valid set
+      const isValidCard = validCards.some((c) => c.id === card.id);
+      if (!isValidCard) return;
 
       setSelectedCards((prev) => {
         // If card is already selected, remove it
@@ -112,11 +113,19 @@ const App: React.FC = () => {
         }
 
         // For face-down cards, only allow one at a time
-        if (player.hand.length === 0 && player.faceUpCards.length === 0) {
+        if (validCards === player.faceDownCards) {
           return [card];
         }
 
-        // Only allow selecting cards of the same rank
+        // For first play or empty pile, allow any card selection
+        if (gameState.pile.length === 0) {
+          // If no cards selected yet, start new selection
+          if (prev.length === 0) return [card];
+          // If cards already selected, only allow same rank
+          return prev[0].rank === card.rank ? [...prev, card] : prev;
+        }
+
+        // Only allow selecting cards of the same rank for subsequent plays
         if (prev.length > 0 && prev[0].rank !== card.rank) {
           return prev;
         }
@@ -130,10 +139,17 @@ const App: React.FC = () => {
     if (!gameState || selectedCards.length === 0) return;
 
     try {
+      // Ensure selected cards are face up when played
+      const cardsToPlay = selectedCards.map((card) => ({
+        ...card,
+        faceUp: true,
+        location: CardLocation.PILE,
+      }));
+
       const action = {
         type: ActionType.PLAY_CARDS,
         playerId: currentPlayerId,
-        cards: selectedCards,
+        cards: cardsToPlay,
         timestamp: Date.now(),
       };
 
