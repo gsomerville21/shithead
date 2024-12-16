@@ -56,6 +56,7 @@ export interface GameRules {
   transparentEights: boolean;
   jackSkips: boolean;
   twoReset: boolean;
+  minNextCard: number; // Minimum value required for next card (used after playing a 2)
 }
 
 export interface SpecialEffect {

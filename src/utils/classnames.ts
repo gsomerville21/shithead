@@ -1,4 +1,9 @@
-type ClassValue = string | undefined | null | boolean | { [key: string]: boolean | undefined | null };
+type ClassValue =
+  | string
+  | undefined
+  | null
+  | boolean
+  | { [key: string]: boolean | undefined | null };
 
 export function cn(...classes: ClassValue[]): string {
   return classes

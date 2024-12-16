@@ -25,6 +25,11 @@ export class GameService {
     this.botService = new BotService(this);
   }
 
+  // Public method to get bot moves
+  getBotMove(state: GameState, botId: string): Card[] {
+    return this.botService.determineBotMove(state, botId);
+  }
+
   processAction(state: GameState, action: GameAction): GameState {
     const newState = { ...state };
     const player = newState.players.get(action.playerId);
@@ -57,11 +62,61 @@ export class GameService {
     }
   }
 
+  private drawCardsFromDeck(state: GameState, player: PlayerState, count: number): void {
+    const cardsToAdd = Math.min(count, state.deck.length);
+    if (cardsToAdd > 0) {
+      const drawnCards = state.deck.splice(0, cardsToAdd).map((card) => ({
+        ...card,
+        location: CardLocation.HAND,
+        faceUp: true,
+        ownerId: player.id,
+      }));
+      player.hand.push(...drawnCards);
+    }
+  }
+
   private processPlayCards(state: GameState, player: PlayerState, cards: Card[]): GameState {
-    // Validate play
     const topCard = state.pile.length > 0 ? state.pile[state.pile.length - 1] : null;
-    if (!this.isValidPlay(cards, topCard)) {
-      throw new Error('Invalid card play');
+    const playingFromFaceDown = player.hand.length === 0 && player.faceUpCards.length === 0;
+
+    // Handle face-down card play
+    if (playingFromFaceDown) {
+      if (cards.length !== 1) {
+        throw new Error('Can only play one face-down card at a time');
+      }
+
+      const playedCard = cards[0];
+      if (!this.isValidPlay(cards, topCard, state.pile, state.config.rules.minNextCard)) {
+        // Invalid face-down play - pick up pile including the invalid card
+        player.hand.push(
+          ...state.pile.map((card) => ({
+            ...card,
+            location: CardLocation.HAND,
+            faceUp: true,
+            ownerId: player.id,
+          }))
+        );
+        player.hand.push({
+          ...playedCard,
+          location: CardLocation.HAND,
+          faceUp: true,
+          ownerId: player.id,
+        });
+        state.pile = [];
+
+        // Move to next player
+        state.currentPlayer = state.nextPlayer;
+        const players = Array.from(state.players.keys());
+        const nextIndex = (players.indexOf(state.nextPlayer) + 1) % players.length;
+        state.nextPlayer = players[nextIndex];
+
+        return state;
+      }
+    } else {
+      // Normal play validation
+      if (!this.isValidPlay(cards, topCard, state.pile, state.config.rules.minNextCard)) {
+        throw new Error('Invalid card play');
+      }
     }
 
     // Remove cards from player's appropriate location
@@ -85,8 +140,16 @@ export class GameService {
     }));
     state.pile.push(...playedCards);
 
+    // Draw cards if hand is below 3 and there are cards in the deck
+    if (player.hand.length < 3 && state.deck.length > 0) {
+      this.drawCardsFromDeck(state, player, 3 - player.hand.length);
+    }
+
     // Check for special effects
-    if (cards.length === 4) {
+    if (
+      cards.length === 4 ||
+      this.canCompleteFourOfAKind(cards, state.pile.slice(0, -cards.length))
+    ) {
       // Four of a kind burns the pile
       state.pile = [];
       state.specialEffects.push({
@@ -98,20 +161,29 @@ export class GameService {
         type: SpecialEffectType.SKIP,
         timestamp: Date.now(),
       });
-      // Skip next player
-      const players = Array.from(state.players.keys());
-      const currentIndex = players.indexOf(state.currentPlayer);
-      state.nextPlayer = players[(currentIndex + 2) % players.length];
+      // Skip next player (in 2-player game, current player plays again)
+      if (state.players.size === 2) {
+        state.nextPlayer = state.currentPlayer;
+      } else {
+        const players = Array.from(state.players.keys());
+        const currentIndex = players.indexOf(state.currentPlayer);
+        state.nextPlayer = players[(currentIndex + 2) % players.length];
+      }
     } else if (cards[0].rank === Rank.TWO) {
       state.specialEffects.push({
         type: SpecialEffectType.RESET,
         timestamp: Date.now(),
       });
+      // Next card must be 3 or higher
+      state.config.rules.minNextCard = 3;
     } else if (cards[0].rank === Rank.EIGHT) {
       state.specialEffects.push({
         type: SpecialEffectType.TRANSPARENT,
         timestamp: Date.now(),
       });
+    } else {
+      // Reset minNextCard for normal plays
+      state.config.rules.minNextCard = 0;
     }
 
     // Update current player if not burned
@@ -144,20 +216,42 @@ export class GameService {
 
   private processPickupPile(state: GameState, player: PlayerState): GameState {
     // Add pile to player's hand with faceUp=true for visibility
-    player.hand.push(
-      ...state.pile.map((card) => ({
-        ...card,
-        faceUp: true,
-        location: CardLocation.HAND,
-      }))
-    );
+    const pickedUpCards = state.pile.map((card) => ({
+      ...card,
+      faceUp: true,
+      location: CardLocation.HAND,
+      ownerId: player.id,
+    }));
+    player.hand.push(...pickedUpCards);
     state.pile = [];
 
-    // Move to next player
-    state.currentPlayer = state.nextPlayer;
-    const players = Array.from(state.players.keys());
-    const nextIndex = (players.indexOf(state.nextPlayer) + 1) % players.length;
-    state.nextPlayer = players[nextIndex];
+    // Check for immediate four-of-a-kind burn opportunity
+    const rankCounts = new Map<Rank, number>();
+    player.hand.forEach((card) => {
+      rankCounts.set(card.rank, (rankCounts.get(card.rank) || 0) + 1);
+    });
+
+    const fourOfAKindRank = Array.from(rankCounts.entries()).find(([_, count]) => count === 4)?.[0];
+    if (fourOfAKindRank) {
+      const fourCards = player.hand.filter((card) => card.rank === fourOfAKindRank).slice(0, 4);
+      player.hand = player.hand.filter((card) => !fourCards.includes(card));
+      state.pile = fourCards.map((card) => ({
+        ...card,
+        location: CardLocation.PILE,
+      }));
+      state.specialEffects.push({
+        type: SpecialEffectType.BURN,
+        timestamp: Date.now(),
+      });
+      // Player gets another turn after burning
+      state.nextPlayer = player.id;
+    } else {
+      // Move to next player
+      state.currentPlayer = state.nextPlayer;
+      const players = Array.from(state.players.keys());
+      const nextIndex = (players.indexOf(state.nextPlayer) + 1) % players.length;
+      state.nextPlayer = players[nextIndex];
+    }
 
     state.lastAction = {
       type: ActionType.PICKUP_PILE,
@@ -169,6 +263,11 @@ export class GameService {
   }
 
   private processSwapCards(state: GameState, player: PlayerState, cards: Card[]): GameState {
+    // Only allow swaps during SWAP phase
+    if (state.phase !== GamePhase.SWAP) {
+      throw new Error('Can only swap cards during setup phase');
+    }
+
     const [handCard, faceUpCard] = cards;
 
     // Validate cards exist in correct locations
@@ -210,6 +309,25 @@ export class GameService {
     };
 
     return state;
+  }
+
+  private canCompleteFourOfAKind(playedCards: Card[], pileCards: Card[]): boolean {
+    const rankCounts = new Map<Rank, number>();
+
+    // Count played cards
+    playedCards.forEach((card) => {
+      rankCounts.set(card.rank, (rankCounts.get(card.rank) || 0) + 1);
+    });
+
+    // Count relevant pile cards
+    pileCards.forEach((card) => {
+      if (rankCounts.has(card.rank)) {
+        rankCounts.set(card.rank, rankCounts.get(card.rank)! + 1);
+      }
+    });
+
+    // Check if any rank reaches four
+    return Array.from(rankCounts.values()).some((count) => count === 4);
   }
 
   initializeGame(numBots: number = 0): GameState {
@@ -263,6 +381,7 @@ export class GameService {
           transparentEights: true,
           jackSkips: true,
           twoReset: true,
+          minNextCard: 0,
         },
         hostId: Array.from(players.keys())[0],
       },
@@ -343,36 +462,12 @@ export class GameService {
     return state;
   }
 
-  processBotTurn(gameState: GameState): GameState {
-    const currentPlayer = gameState.players.get(gameState.currentPlayer);
-    if (!currentPlayer?.isBot) return gameState;
-
-    // Get bot's move
-    const cards = this.botService.determineBotMove(gameState, currentPlayer.id);
-
-    // Process the move
-    if (cards.length === 0) {
-      // Bot picks up pile
-      return this.processAction(gameState, {
-        type: ActionType.PICKUP_PILE,
-        playerId: currentPlayer.id,
-        timestamp: Date.now(),
-      });
-    } else {
-      // Bot plays cards
-      return this.processAction(gameState, {
-        type: ActionType.PLAY_CARDS,
-        playerId: currentPlayer.id,
-        cards,
-        timestamp: Date.now(),
-      });
-    }
-  }
-
-  isValidPlay(cards: Card[], topCard: Card | null): boolean {
+  isValidPlay(cards: Card[], topCard: Card | null, pile: Card[], minNextCard: number): boolean {
     // Check if all cards have same rank
     const allSameRank = cards.every((card) => card.rank === cards[0].rank);
-    if (!allSameRank) return false;
+    if (!allSameRank && !this.canCompleteFourOfAKind(cards, topCard ? [topCard] : [])) {
+      return false;
+    }
 
     // Special case: empty pile or first play
     if (!topCard) return true;
@@ -380,9 +475,30 @@ export class GameService {
     // Special cards
     if (cards[0].rank === Rank.TWO) return true; // 2 can be played on anything
     if (cards[0].rank === Rank.EIGHT) return true; // 8 is transparent
+    if (topCard.rank === Rank.EIGHT) {
+      // Look for last non-8 card to compare against
+      const lastNonEight = this.findLastNonEightCard(pile);
+      return lastNonEight ? this.getCardValue(cards[0]) >= this.getCardValue(lastNonEight) : true;
+    }
+
+    // Check minimum card requirement after a 2
+    if (minNextCard > 0) {
+      if (this.getCardValue(cards[0]) < minNextCard) {
+        return false;
+      }
+    }
 
     // Compare with top card
     return this.getCardValue(cards[0]) >= this.getCardValue(topCard);
+  }
+
+  private findLastNonEightCard(pile: Card[]): Card | null {
+    for (let i = pile.length - 1; i >= 0; i--) {
+      if (pile[i].rank !== Rank.EIGHT) {
+        return pile[i];
+      }
+    }
+    return null;
   }
 
   getCardValue(card: Card): number {

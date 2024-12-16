@@ -5,6 +5,7 @@
 import { Card, Rank, CardLocation } from '../types/card-types';
 import { SpecialEffectType, SpecialEffect } from '../types/game';
 import { compareCards, getCardValue, valueToRank } from './card';
+import { GameStateContext } from './game-state';
 
 interface SpecialEffectResult {
   effects: SpecialEffect[];
@@ -13,19 +14,12 @@ interface SpecialEffectResult {
   burnPile: boolean;
 }
 
-interface GameState {
-  pile: Card[];
-  currentPlayer: string;
-  nextPlayer: string;
-  players: string[];
-}
-
 /**
  * Process all special effects for played cards
  */
 export function processSpecialEffects(
   playedCards: Card[],
-  gameState: GameState
+  gameState: GameStateContext
 ): SpecialEffectResult {
   const result: SpecialEffectResult = {
     effects: [],
@@ -42,6 +36,7 @@ export function processSpecialEffects(
     });
     result.burnPile = true;
     result.nextValue = 0; // Any card can be played after burn
+    return result; // Return early as burn overrides other effects
   }
 
   // Process 2s (reset)
@@ -50,7 +45,8 @@ export function processSpecialEffects(
       type: SpecialEffectType.RESET,
       timestamp: Date.now(),
     });
-    result.nextValue = 2;
+    result.nextValue = 2; // Next card must be 3 or higher
+    return result; // Return early as 2s override other effects
   }
 
   // Process 8s (transparent)
@@ -61,6 +57,7 @@ export function processSpecialEffects(
     });
     // Keep previous card's value
     result.nextValue = getLastNonEightValue(gameState.pile);
+    // Don't return early as 8s can be combined with Jacks
   }
 
   // Process Jacks (skip)
@@ -69,7 +66,8 @@ export function processSpecialEffects(
       type: SpecialEffectType.SKIP,
       timestamp: Date.now(),
     });
-    result.skipCount = playedCards.length;
+    // In a two-player game, skip count of 1 effectively means current player plays again
+    result.skipCount = gameState.players.length === 2 ? 2 : playedCards.length;
   }
 
   return result;
@@ -78,36 +76,41 @@ export function processSpecialEffects(
 /**
  * Validate if cards can be played considering special effects
  */
-export function validateSpecialPlay(playedCards: Card[], gameState: GameState): boolean {
-  // Can't play different ranks together (except in four-of-a-kind completion)
+export function validateSpecialPlay(playedCards: Card[], gameState: GameStateContext): boolean {
+  // Validate multiple cards are of the same rank
   if (!allSameRank(playedCards) && !canCompleteFourOfAKind(playedCards, gameState.pile)) {
     return false;
   }
 
   const topCard = gameState.pile[gameState.pile.length - 1];
 
-  // Special case: no cards in pile
+  // Special case: no cards in pile or burn pile
   if (!topCard) return true;
 
   // Special case: 2s can be played on anything
   if (playedCards[0].rank === Rank.TWO) return true;
 
-  // Special case: 8s use previous non-8 card's value
+  // Special case: completing a four-of-a-kind
+  if (canCompleteFourOfAKind(playedCards, gameState.pile)) return true;
+
+  // Get effective value considering transparent 8s
+  let effectiveTopCard = topCard;
   if (topCard.rank === Rank.EIGHT) {
     const effectiveValue = getLastNonEightValue(gameState.pile);
     const effectiveRank = valueToRank(effectiveValue);
     if (!effectiveRank) return false;
-    return compareCards(playedCards[0], { ...topCard, rank: effectiveRank }) >= 0;
+    effectiveTopCard = { ...topCard, rank: effectiveRank };
   }
 
-  // Normal comparison
-  return compareCards(playedCards[0], topCard) >= 0;
+  // Card must be equal to or higher than the effective top card
+  const comparison = compareCards(playedCards[0], effectiveTopCard);
+  return comparison >= 0;
 }
 
 /**
  * Calculate next player after applying special effects
  */
-export function getNextPlayer(gameState: GameState, skipCount: number): string {
+export function getNextPlayer(gameState: GameStateContext, skipCount: number): string {
   const currentIndex = gameState.players.indexOf(gameState.currentPlayer);
   const nextIndex = (currentIndex + skipCount + 1) % gameState.players.length;
   return gameState.players[nextIndex];
@@ -121,20 +124,37 @@ function allSameRank(cards: Card[]): boolean {
 }
 
 function getLastNonEightValue(pile: Card[]): number {
+  let consecutiveEights = 0;
+
+  // Count consecutive 8s from the top
   for (let i = pile.length - 1; i >= 0; i--) {
+    if (pile[i].rank === Rank.EIGHT) {
+      consecutiveEights++;
+    } else {
+      break;
+    }
+  }
+
+  // Look for the last non-8 card
+  for (let i = pile.length - consecutiveEights - 1; i >= 0; i--) {
     if (pile[i].rank !== Rank.EIGHT) {
       return getCardValue(pile[i].rank);
     }
   }
-  return 8; // If no non-8 found, use 8 as base value
+
+  // If all cards are 8s or no previous cards
+  return 8; // Use 8 as base value
 }
 
 function checkFourOfAKind(playedCards: Card[], pile: Card[]): boolean {
+  // Direct four of a kind
   if (playedCards.length === 4 && allSameRank(playedCards)) {
     return true;
   }
 
-  // Check if playing cards completes four of a kind with pile
+  // Completing four of a kind with pile
+  if (!allSameRank(playedCards)) return false;
+
   const relevantPileCards = pile.filter((card) => card.rank === playedCards[0].rank);
   return playedCards.length + relevantPileCards.length === 4;
 }
@@ -154,6 +174,6 @@ function canCompleteFourOfAKind(playedCards: Card[], pile: Card[]): boolean {
     }
   });
 
-  // Check if any rank reaches four
+  // Check if any rank reaches exactly four
   return Array.from(rankCounts.values()).some((count) => count === 4);
 }

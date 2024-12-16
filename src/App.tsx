@@ -15,6 +15,7 @@ const defaultConfig: GameConfig = {
     transparentEights: true,
     jackSkips: true,
     twoReset: true,
+    minNextCard: 0,
   },
   hostId: 'player1',
 };
@@ -41,8 +42,13 @@ const App: React.FC = () => {
       if (currentPlayer?.isBot) {
         // Add a small delay to make bot moves visible
         const timeoutId = setTimeout(() => {
-          const newState = gameService.current.processBotTurn(gameState);
-          setGameState(newState);
+          // Use the bot service through the game service
+          const botMove = gameService.current.getBotMove(gameState, currentPlayer.id);
+          if (botMove.length > 0) {
+            handlePlayCards(botMove);
+          } else {
+            handlePickupPile();
+          }
         }, 1000);
         return () => clearTimeout(timeoutId);
       }
@@ -135,12 +141,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePlayCards = () => {
-    if (!gameState || selectedCards.length === 0) return;
+  const handlePlayCards = (cardsToPlay?: Card[]) => {
+    if (!gameState) return;
+
+    const cards = Array.isArray(cardsToPlay) ? cardsToPlay : selectedCards;
+    if (cards.length === 0) return;
 
     try {
       // Ensure selected cards are face up when played
-      const cardsToPlay = selectedCards.map((card) => ({
+      const playCards = cards.map((card) => ({
         ...card,
         faceUp: true,
         location: CardLocation.PILE,
@@ -148,8 +157,8 @@ const App: React.FC = () => {
 
       const action = {
         type: ActionType.PLAY_CARDS,
-        playerId: currentPlayerId,
-        cards: cardsToPlay,
+        playerId: gameState.currentPlayer,
+        cards: playCards,
         timestamp: Date.now(),
       };
 
@@ -168,7 +177,7 @@ const App: React.FC = () => {
     try {
       const action = {
         type: ActionType.PICKUP_PILE,
-        playerId: currentPlayerId,
+        playerId: gameState.currentPlayer,
         timestamp: Date.now(),
       };
 
@@ -234,7 +243,7 @@ const App: React.FC = () => {
         gameState={gameState}
         currentPlayerId={currentPlayerId}
         selectedCards={selectedCards}
-        onPlay={handlePlayCards}
+        onPlay={() => handlePlayCards()}
         onPickup={handlePickupPile}
         onSwapConfirm={handleSwapConfirm}
         onReadyConfirm={handleReadyConfirm}
@@ -243,6 +252,8 @@ const App: React.FC = () => {
         gameState={gameState}
         onCardClick={handleCardClick}
         currentPlayerId={currentPlayerId}
+        onPlayCards={() => handlePlayCards()}
+        onPickupPile={handlePickupPile}
       />
 
       {/* Game status messages */}

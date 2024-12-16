@@ -1,15 +1,20 @@
 import * as React from 'react';
 import { motion } from 'framer-motion';
 import Card from '../Card/Card';
+import BotDebugPanel from '../BotDebugPanel/BotDebugPanel';
 import { GameState, PlayerState } from '../../types/game';
 import { Card as CardType, CardLocation, Suit, Rank } from '../../types/card-types';
 import { cn } from '../../utils/classnames';
+import { BotService } from '../../services/botService';
+import { GameService } from '../../services/gameService';
 
 export interface GameBoardProps {
   gameState: GameState;
   onCardClick?: (card: CardType) => void;
   currentPlayerId: string;
   className?: string;
+  onPlayCards: (cards: CardType[]) => void;
+  onPickupPile: () => void;
 }
 
 type Position = {
@@ -51,12 +56,6 @@ const PlayerArea = ({
   onCardClick?: (card: CardType) => void;
   position: Position;
 }) => {
-  // Function to transform card rotation based on player position
-  const getCardRotation = (baseRotation: number) => {
-    // Invert the player area rotation to keep cards readable
-    return -position.rotate + baseRotation;
-  };
-
   const { rotate, ...positionStyles } = position;
 
   return (
@@ -70,10 +69,13 @@ const PlayerArea = ({
       {/* Player name badge */}
       <div
         className={cn(
-          'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full flex items-center gap-2',
-          isActivePlayer ? 'bg-blue-600/80' : 'bg-black/50',
-          'text-white text-sm whitespace-nowrap',
-          rotate > 90 || rotate < -90 ? 'bottom-full mb-2' : 'top-full mt-2'
+          'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full flex items-center gap-2 text-white text-sm whitespace-nowrap',
+          {
+            'bg-blue-600/80': isActivePlayer,
+            'bg-black/50': !isActivePlayer,
+            'bottom-full mb-2': rotate > 90 || rotate < -90,
+            'top-full mt-2': !(rotate > 90 || rotate < -90),
+          }
         )}
       >
         {player.id}
@@ -96,7 +98,7 @@ const PlayerArea = ({
               style={{
                 left: `${i * 25}px`,
                 zIndex: 1,
-                transform: `rotate(${getCardRotation(0)}deg)`,
+                transform: `rotate(${-position.rotate}deg)`,
               }}
             >
               <Card
@@ -119,7 +121,7 @@ const PlayerArea = ({
               style={{
                 left: `${i * 25}px`,
                 zIndex: 2,
-                transform: `rotate(${getCardRotation(0)}deg)`,
+                transform: `rotate(${-position.rotate}deg)`,
               }}
             >
               <Card
@@ -140,7 +142,7 @@ const PlayerArea = ({
               style={{
                 left: `${i * 25}px`,
                 zIndex: 3,
-                transform: `rotate(${getCardRotation(0)}deg)`,
+                transform: `rotate(${-position.rotate}deg)`,
               }}
             >
               <Card
@@ -160,29 +162,51 @@ const GameBoard = ({
   gameState,
   onCardClick,
   currentPlayerId,
+  onPlayCards,
+  onPickupPile,
   className,
 }: GameBoardProps): React.ReactElement => {
   const players = Array.from(gameState.players.values());
   const positions = PLAYER_POSITIONS[players.length] || [];
+  const [lastBotMove, setLastBotMove] = React.useState<CardType[]>([]);
+
+  // Initialize services
+  const gameService = React.useMemo(() => new GameService(), []);
+  const botService = React.useMemo(() => new BotService(gameService), [gameService]);
+
+  // Get current bot player if it's their turn
+  const currentBotPlayer = React.useMemo(() => {
+    const player = gameState.players.get(gameState.currentPlayer);
+    return player?.isBot ? player : null;
+  }, [gameState.currentPlayer, gameState.players]);
+
+  // Handle bot moves
+  React.useEffect(() => {
+    if (!currentBotPlayer) return;
+
+    // Add a small delay to make bot moves visible
+    const timeout = setTimeout(() => {
+      const botMove = botService.determineBotMove(gameState, currentBotPlayer.id);
+      if (botMove.length > 0) {
+        setLastBotMove(botMove);
+        onPlayCards(botMove);
+      } else {
+        onPickupPile();
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [currentBotPlayer, gameState, botService, onPlayCards, onPickupPile]);
 
   // Reorder players to ensure current player is at the bottom position
   const orderedPlayers = React.useMemo(() => {
     const currentPlayerIndex = players.findIndex((p) => p.id === currentPlayerId);
     if (currentPlayerIndex === -1) return players;
-
-    // Rotate array so current player is last (bottom position)
     return [...players.slice(currentPlayerIndex + 1), ...players.slice(0, currentPlayerIndex + 1)];
   }, [players, currentPlayerId]);
 
   return (
-    <div
-      className={cn(
-        'relative w-full',
-        // Account for header and footer space
-        'h-[calc(100vh-96px)] mt-12 mb-20',
-        className
-      )}
-    >
+    <div className={cn('relative w-full h-[calc(100vh-96px)] mt-12 mb-20', className)}>
       {/* Game table */}
       <div className="absolute inset-4 rounded-[35%] bg-green-800 border-8 border-[#543021] shadow-lg">
         {/* Center play area */}
@@ -247,6 +271,9 @@ const GameBoard = ({
           />
         ))}
       </div>
+
+      {/* Bot Debug Panel */}
+      {currentBotPlayer && <BotDebugPanel botPlayer={currentBotPlayer} lastMove={lastBotMove} />}
     </div>
   );
 };

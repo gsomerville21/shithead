@@ -23,7 +23,7 @@ export class BotService {
     const playableCards = this.getPlayableCards(botPlayer, gameState.phase);
 
     // Find valid plays
-    const validPlays = this.findValidPlays(playableCards, topCard);
+    const validPlays = this.findValidPlays(playableCards, topCard, gameState);
     if (validPlays.length === 0) return []; // Pick up pile if no valid plays
 
     // Prioritize plays
@@ -58,12 +58,19 @@ export class BotService {
   /**
    * Finds all valid card combinations that can be played
    */
-  private findValidPlays(cards: Card[], topCard: Card | null): Card[][] {
+  private findValidPlays(cards: Card[], topCard: Card | null, gameState: GameState): Card[][] {
     const validPlays: Card[][] = [];
 
     // Single card plays
     cards.forEach((card) => {
-      if (this.gameService.isValidPlay([card], topCard)) {
+      if (
+        this.gameService.isValidPlay(
+          [card],
+          topCard,
+          gameState.pile,
+          gameState.config.rules.minNextCard
+        )
+      ) {
         validPlays.push([card]);
       }
     });
@@ -71,7 +78,14 @@ export class BotService {
     // Multiple card plays (same rank)
     const rankGroups = this.groupCardsByRank(cards);
     rankGroups.forEach((group) => {
-      if (group.length > 1 && this.gameService.isValidPlay(group, topCard)) {
+      if (
+        this.gameService.isValidPlay(
+          group,
+          topCard,
+          gameState.pile,
+          gameState.config.rules.minNextCard
+        )
+      ) {
         validPlays.push(group);
       }
     });
