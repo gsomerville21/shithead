@@ -12,13 +12,23 @@ export interface GameBoardProps {
   className?: string;
 }
 
-interface PlayerAreaProps {
-  player: PlayerState;
-  isCurrentPlayer: boolean;
-  isActivePlayer: boolean;
-  onCardClick?: (card: CardType) => void;
-  position: 'bottom' | 'top' | 'left' | 'right';
-}
+const PLAYER_POSITIONS = {
+  2: [
+    { top: '5%', left: '50%', rotate: 0 },      // North
+    { bottom: '5%', left: '50%', rotate: 180 }  // South
+  ],
+  3: [
+    { top: '5%', left: '50%', rotate: 0 },      // North
+    { bottom: '25%', right: '5%', rotate: 120 }, // Southeast
+    { bottom: '25%', left: '5%', rotate: -120 }  // Southwest
+  ],
+  4: [
+    { top: '5%', left: '50%', rotate: 0 },      // North
+    { left: '5%', top: '50%', rotate: -90 },    // West
+    { bottom: '5%', left: '50%', rotate: 180 }, // South
+    { right: '5%', top: '50%', rotate: 90 }     // East
+  ]
+};
 
 const PlayerArea = ({
   player,
@@ -26,41 +36,54 @@ const PlayerArea = ({
   isActivePlayer,
   onCardClick,
   position,
-}: PlayerAreaProps): React.ReactElement => {
-  const positionClasses = {
-    bottom: 'bottom-4 left-1/2 -translate-x-1/2',
-    top: 'top-4 left-1/2 -translate-x-1/2',
-    left: 'left-4 top-1/2 -translate-y-1/2 rotate-90',
-    right: 'right-4 top-1/2 -translate-y-1/2 -rotate-90',
-  };
-
-  const cardStackOffset = 30; // Pixels to offset each card in a stack
-
+  phase
+}: {
+  player: PlayerState;
+  isCurrentPlayer: boolean;
+  isActivePlayer: boolean;
+  onCardClick?: (card: CardType) => void;
+  position: { top?: string; bottom?: string; left?: string; right?: string; rotate: number };
+  phase: string;
+}) => {
   return (
-    <div
-      className={cn(
-        'absolute p-6 rounded-xl transition-all duration-300',
-        positionClasses[position],
-        isActivePlayer && 'ring-2 ring-yellow-400 bg-black/20'
-      )}
+    <div 
+      className="absolute"
+      style={{ 
+        ...position,
+        transform: `rotate(${position.rotate}deg)`
+      }}
     >
-      <div className="flex flex-col items-center gap-6">
+      {/* Player name and status */}
+      <div className={cn(
+        'absolute left-1/2 -translate-x-1/2 px-3 py-1 rounded-full',
+        isActivePlayer ? 'bg-blue-600' : 'bg-black/50',
+        'text-white text-sm whitespace-nowrap z-10',
+        position.rotate > 90 || position.rotate < -90 ? 'bottom-full mb-2' : 'top-full mt-2'
+      )}>
+        {player.id}
+        {phase === 'SWAP' && isCurrentPlayer && (
+          <span className="ml-2 text-xs bg-yellow-500 px-2 py-0.5 rounded-full">
+            Swap
+          </span>
+        )}
+      </div>
+
+      {/* Cards area */}
+      <div className="relative">
         {/* Face down cards */}
-        <div className="relative h-36 min-w-[96px]">
-          {player.faceDownCards.map((card, index) => (
-            <div
+        <div className="absolute">
+          {player.faceDownCards.map((card, i) => (
+            <div 
               key={card.id}
-              className="absolute transition-all duration-200"
+              className="absolute"
               style={{
-                left: `${index * cardStackOffset}px`,
-                zIndex: index,
+                left: `${i * 20}px`,
+                zIndex: 1
               }}
             >
               <Card
                 card={card}
-                selectable={
-                  isCurrentPlayer && player.hand.length === 0 && player.faceUpCards.length === 0
-                }
+                selectable={isCurrentPlayer && player.hand.length === 0 && player.faceUpCards.length === 0}
                 onClick={onCardClick}
               />
             </div>
@@ -68,14 +91,14 @@ const PlayerArea = ({
         </div>
 
         {/* Face up cards */}
-        <div className="relative h-36 min-w-[96px]">
-          {player.faceUpCards.map((card, index) => (
-            <div
+        <div className="absolute" style={{ top: '30px' }}>
+          {player.faceUpCards.map((card, i) => (
+            <div 
               key={card.id}
-              className="absolute transition-all duration-200"
+              className="absolute"
               style={{
-                left: `${index * cardStackOffset}px`,
-                zIndex: index,
+                left: `${i * 20}px`,
+                zIndex: 2
               }}
             >
               <Card
@@ -88,31 +111,23 @@ const PlayerArea = ({
         </div>
 
         {/* Hand cards */}
-        <div className="relative h-36 min-w-[96px]">
-          {player.hand.map((card, index) => (
-            <div
+        <div className="absolute" style={{ top: '60px' }}>
+          {player.hand.map((card, i) => (
+            <div 
               key={card.id}
-              className="absolute transition-all duration-200"
+              className="absolute transition-transform hover:-translate-y-2"
               style={{
-                left: `${index * cardStackOffset}px`,
-                zIndex: index,
+                left: `${i * 20}px`,
+                zIndex: 3
               }}
             >
-              <Card card={card} selectable={isCurrentPlayer} onClick={onCardClick} />
+              <Card
+                card={card}
+                selectable={isCurrentPlayer}
+                onClick={onCardClick}
+              />
             </div>
           ))}
-        </div>
-
-        {/* Player info */}
-        <div
-          className={cn(
-            'px-4 py-2 rounded-full text-sm font-medium shadow-lg transition-colors',
-            !player.connected && 'bg-red-900/50 text-red-200',
-            isCurrentPlayer && 'bg-blue-900/50 text-blue-200',
-            !isCurrentPlayer && player.connected && 'bg-black/50 text-white'
-          )}
-        >
-          {player.id} {!player.connected && '(Disconnected)'}
         </div>
       </div>
     </div>
@@ -126,88 +141,74 @@ const GameBoard = ({
   className,
 }: GameBoardProps): React.ReactElement => {
   const players = Array.from(gameState.players.values());
-  const playerCount = players.length;
-
-  // Calculate positions based on player count
-  const getPlayerPosition = (index: number): 'bottom' | 'top' | 'left' | 'right' => {
-    if (playerCount === 2) {
-      return index === 0 ? 'bottom' : 'top';
-    }
-    if (playerCount === 3) {
-      return index === 0 ? 'bottom' : index === 1 ? 'top' : 'right';
-    }
-    return index === 0 ? 'bottom' : index === 1 ? 'left' : index === 2 ? 'top' : 'right';
-  };
+  const positions = PLAYER_POSITIONS[players.length as keyof typeof PLAYER_POSITIONS] || [];
 
   return (
-    <div className={cn('relative w-full h-full min-h-[600px] bg-green-800', className)}>
-      {/* Center pile */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-        <div className="relative w-24 h-36">
-          {gameState.pile.map((card, index) => (
-            <motion.div
-              key={card.id}
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="absolute"
-              style={{
-                zIndex: index,
-                transform: `rotate(${Math.random() * 20 - 10}deg)`,
-              }}
-            >
-              <Card card={card} />
-            </motion.div>
-          ))}
-        </div>
-      </div>
+    <div className={cn('relative w-full h-full min-h-[800px]', className)}>
+      {/* Game table */}
+      <div className="absolute inset-4 rounded-[35%] bg-green-800 border-8 border-[#543021] shadow-lg">
+        {/* Center play area */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-16">
+          {/* Deck */}
+          {gameState.deck.length > 0 && (
+            <div className="relative">
+              {[...Array(Math.min(3, gameState.deck.length))].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute"
+                  style={{
+                    top: `${-i * 2}px`,
+                    left: `${-i * 2}px`
+                  }}
+                >
+                  <Card
+                    card={{
+                      id: `deck-${i}`,
+                      suit: Suit.SPADES,
+                      rank: Rank.TWO,
+                      location: CardLocation.DECK,
+                      faceUp: false,
+                      position: i,
+                    }}
+                  />
+                </div>
+              ))}
+              <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-1 rounded bg-black/50 text-white text-xs">
+                {gameState.deck.length}
+              </div>
+            </div>
+          )}
 
-      {/* Deck */}
-      {gameState.deck.length > 0 && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -ml-40">
-          <div className="relative">
-            {[...Array(Math.min(3, gameState.deck.length))].map((_, index) => (
-              <div
-                key={index}
-                className="absolute transition-transform"
+          {/* Pile */}
+          <div className="relative h-36 w-24">
+            {gameState.pile.map((card, i) => (
+              <motion.div
+                key={card.id}
+                className="absolute"
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 style={{
-                  top: `${-index * 2}px`,
-                  left: `${-index * 2}px`,
+                  transform: `rotate(${Math.random() * 20 - 10}deg)`
                 }}
               >
-                <Card
-                  card={{
-                    id: `deck-${index}`,
-                    suit: Suit.SPADES,
-                    rank: Rank.TWO,
-                    location: CardLocation.DECK,
-                    faceUp: false,
-                    position: index,
-                  }}
-                />
-              </div>
+                <Card card={card} />
+              </motion.div>
             ))}
           </div>
-          <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-black/50 text-white text-sm font-medium shadow-lg">
-            {gameState.deck.length} cards remaining
-          </div>
         </div>
-      )}
 
-      {/* Player areas */}
-      {players.map((player, index) => (
-        <PlayerArea
-          key={player.id}
-          player={player}
-          isCurrentPlayer={player.id === currentPlayerId}
-          isActivePlayer={player.id === gameState.currentPlayer}
-          onCardClick={onCardClick}
-          position={getPlayerPosition(index)}
-        />
-      ))}
-
-      {/* Game phase indicator */}
-      <div className="absolute top-4 left-4 px-4 py-2 rounded-full bg-black/50 text-white text-sm font-medium shadow-lg">
-        {gameState.phase}
+        {/* Players */}
+        {players.map((player, i) => (
+          <PlayerArea
+            key={player.id}
+            player={player}
+            isCurrentPlayer={player.id === currentPlayerId}
+            isActivePlayer={player.id === gameState.currentPlayer}
+            onCardClick={onCardClick}
+            position={positions[i]}
+            phase={gameState.phase}
+          />
+        ))}
       </div>
     </div>
   );
