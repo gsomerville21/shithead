@@ -171,7 +171,10 @@ const GameBoard = ({
   const [lastBotMove, setLastBotMove] = React.useState<CardType[]>([]);
 
   // Initialize services
-  const gameService = React.useMemo(() => new GameService(), []);
+  const gameService = React.useMemo(
+    () => new GameService(gameState.id, players.length),
+    [gameState.id, players.length]
+  );
   const botService = React.useMemo(() => new BotService(gameService), [gameService]);
 
   // Get current bot player if it's their turn
@@ -179,6 +182,11 @@ const GameBoard = ({
     const player = gameState.players.get(gameState.currentPlayer);
     return player?.isBot ? player : null;
   }, [gameState.currentPlayer, gameState.players]);
+
+  // Get first bot player for debug panel
+  const firstBotPlayer = React.useMemo(() => {
+    return players.find((player) => player.isBot);
+  }, [players]);
 
   // Handle bot moves
   React.useEffect(() => {
@@ -245,7 +253,7 @@ const GameBoard = ({
           <div className="relative h-36 w-24">
             {gameState.pile.map((card, i) => (
               <motion.div
-                key={card.id}
+                key={`${card.id}-${i}`}
                 className="absolute"
                 initial={{ scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -272,8 +280,8 @@ const GameBoard = ({
         ))}
       </div>
 
-      {/* Bot Debug Panel */}
-      {currentBotPlayer && <BotDebugPanel botPlayer={currentBotPlayer} lastMove={lastBotMove} />}
+      {/* Bot Debug Panel - Always show if there's at least one bot */}
+      {firstBotPlayer && <BotDebugPanel botPlayer={firstBotPlayer} lastMove={lastBotMove} />}
     </div>
   );
 };
