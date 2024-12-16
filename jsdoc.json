@@ -1,0 +1,34 @@
+{
+  "source": {
+    "include": ["src"],
+    "includePattern": ".+\\.(js|ts|tsx)$",
+    "excludePattern": "(node_modules/|docs)"
+  },
+  "plugins": [
+    "plugins/markdown",
+    "better-docs/typescript"
+  ],
+  "opts": {
+    "destination": "./docs",
+    "recurse": true,
+    "readme": "./README.md",
+    "template": "better-docs"
+  },
+  "tags": {
+    "allowUnknownTags": ["typescript"],
+    "dictionaries": ["jsdoc", "typescript"]
+  },
+  "templates": {
+    "better-docs": {
+      "name": "Shithead Card Game Documentation",
+      "title": "Shithead Game Documentation",
+      "css": "style.css",
+      "navLinks": [
+        {
+          "label": "GitHub",
+          "href": "https://github.com/yourusername/shithead-game"
+        }
+      ]
+    }
+  }
+}

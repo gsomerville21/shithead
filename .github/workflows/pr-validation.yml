@@ -1,0 +1,50 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Validate code style
+        run: npm run lint
+      
+      - name: Run tests
+        run: npm run test
+        
+      - name: Build and check size
+        run: npm run build
+        
+      - name: Comment PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+            
+            // Get build size
+            const buildSize = execSync('du -sh dist').toString().trim();
+            
+            const comment = `
+            ## Build Stats
+            - Bundle Size: ${buildSize}
+            - Build Status: ✅ Success
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: comment
+            })

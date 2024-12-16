@@ -1,21 +1,126 @@
-function App() {
+import React, { useState } from 'react';
+import GameBoard from './components/GameBoard';
+import GameFlow from './components/GameFlow';
+import { GameState, GamePhase } from './types/game';
+import { Card, Suit, Rank, CardLocation } from './types/card-types';
+
+// Create a mock game state for development
+const createMockGameState = (): GameState => {
+  const mockCard: Card = {
+    id: '1',
+    suit: Suit.HEARTS,
+    rank: Rank.ACE,
+    location: CardLocation.HAND,
+    faceUp: true,
+    position: 0
+  };
+
+  return {
+    id: 'test-game',
+    phase: GamePhase.PLAY,
+    players: new Map([
+      ['player1', {
+        id: 'player1',
+        hand: [
+          { ...mockCard, id: '1', suit: Suit.HEARTS },
+          { ...mockCard, id: '2', suit: Suit.DIAMONDS },
+          { ...mockCard, id: '3', suit: Suit.SPADES }
+        ],
+        faceUpCards: [
+          { ...mockCard, id: '4', suit: Suit.CLUBS, faceUp: true },
+          { ...mockCard, id: '5', suit: Suit.HEARTS, faceUp: true }
+        ],
+        faceDownCards: [
+          { ...mockCard, id: '6', faceUp: false },
+          { ...mockCard, id: '7', faceUp: false }
+        ],
+        connected: true,
+        ready: true,
+        timeoutWarnings: 0
+      }],
+      ['player2', {
+        id: 'player2',
+        hand: [{ ...mockCard, id: '8' }],
+        faceUpCards: [{ ...mockCard, id: '9', faceUp: true }],
+        faceDownCards: [{ ...mockCard, id: '10', faceUp: false }],
+        connected: true,
+        ready: true,
+        timeoutWarnings: 0
+      }]
+    ]),
+    currentPlayer: 'player1',
+    nextPlayer: 'player2',
+    deck: [
+      { ...mockCard, id: '11', faceUp: false },
+      { ...mockCard, id: '12', faceUp: false }
+    ],
+    pile: [
+      { ...mockCard, id: '13', location: CardLocation.PILE },
+      { ...mockCard, id: '14', location: CardLocation.PILE }
+    ],
+    lastAction: null,
+    specialEffects: [],
+    winner: null,
+    config: {
+      maxPlayers: 2,
+      startingCards: { hand: 3, faceUp: 3, faceDown: 3 },
+      timeouts: { turn: 30000, swap: 60000, reconnect: 120000 },
+      rules: {
+        allowMultiples: true,
+        burnOnFour: true,
+        transparentEights: true,
+        jackSkips: true,
+        twoReset: true
+      },
+      hostId: 'player1'
+    },
+    timestamp: Date.now(),
+    moveHistory: []
+  };
+};
+
+const App: React.FC = () => {
+  const [gameState, setGameState] = useState<GameState>(createMockGameState());
+  const [selectedCards, setSelectedCards] = useState<Card[]>([]);
+
+  const handleCardClick = (card: Card) => {
+    setSelectedCards(prev => {
+      const isSelected = prev.some(c => c.id === card.id);
+      if (isSelected) {
+        return prev.filter(c => c.id !== card.id);
+      }
+      return [...prev, card];
+    });
+  };
+
+  const handlePlayCards = () => {
+    console.log('Playing cards:', selectedCards);
+    // Implement actual game logic here
+  };
+
+  const handlePickupPile = () => {
+    console.log('Picking up pile');
+    // Implement actual game logic here
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
-      <div className="relative py-3 sm:max-w-xl sm:mx-auto">
-        <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-light-blue-500 shadow-lg transform -skew-y-6 sm:skew-y-0 sm:-rotate-6 sm:rounded-3xl"></div>
-        <div className="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20">
-          <div className="max-w-md mx-auto">
-            <div className="divide-y divide-gray-200">
-              <div className="py-8 text-base leading-6 space-y-4 text-gray-700 sm:text-lg sm:leading-7">
-                <h1 className="text-3xl font-extrabold text-gray-900">Shithead Card Game</h1>
-                <p className="mt-4">Welcome to the game! Development in progress...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="w-full h-screen bg-green-900 overflow-hidden">
+      <GameFlow
+        gameState={gameState}
+        currentPlayerId="player1"
+        selectedCards={selectedCards}
+        onPlay={handlePlayCards}
+        onPickup={handlePickupPile}
+        className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10"
+      />
+      <GameBoard
+        gameState={gameState}
+        onCardClick={handleCardClick}
+        currentPlayerId="player1"
+        className="w-full h-full"
+      />
     </div>
   );
-}
+};
 
 export default App;

@@ -1,49 +1,76 @@
-# Shithead Card Game
+# Shithead - Online Multiplayer Card Game
 
-An online multiplayer implementation of the card game Shithead, built with React, TypeScript, and WebSocket.
+[![CI Status](https://github.com/yourusername/shithead-game/workflows/CI/badge.svg)](https://github.com/yourusername/shithead-game/actions)
+[![Documentation Status](https://github.com/yourusername/shithead-game/workflows/Documentation/badge.svg)](https://yourusername.github.io/shithead-game/)
+
+An online multiplayer implementation of the classic card game Shithead, built with React, TypeScript, and WebSocket.
+
+## Quick Start
+
+```bash
+npm install
+npm run dev
+```
+
+Visit `http://localhost:3000` to start playing.
 
 ## Features
 
-- Real-time multiplayer gameplay
-- Support for 2-4 players
-- AI opponents
-- Customizable rules
-- Persistent game state
-- Reconnection handling
+- Real-time multiplayer gameplay for 2-4 players
+- Advanced bot AI with multiple difficulty levels
+- Customizable game rules
+- Seamless disconnection handling
+- Cross-platform support
+
+## Documentation
+
+- [Game Rules](./docs/rules.md)
+- [API Reference](./docs/api/README.md)
+- [Development Guide](./docs/development.md)
+- [Contributing Guidelines](./CONTRIBUTING.md)
+
+## Technical Stack
+
+- Frontend: React, TypeScript, Socket.IO-client
+- Backend: Node.js, Express, Socket.IO
+- State Management: Redux Toolkit
+- Database: PostgreSQL, Redis
+- Testing: Jest, React Testing Library
 
 ## Development
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
+- Node.js >= 18
+- npm >= 9
+- Redis
+- PostgreSQL
 
 ### Setup
 
-1. Clone the repository:
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Copy `.env.example` to `.env` and configure
+4. Start development server: `npm run dev`
+
+### Testing
+
 ```bash
-git clone https://github.com/gsomerville21/shithead.git
-cd shithead
+npm run test        # Run unit tests
+npm run test:e2e    # Run E2E tests
+npm run test:cover  # Generate coverage report
 ```
 
-2. Install dependencies:
+### Building
+
 ```bash
-npm install
+npm run build
 ```
 
-3. Start development server:
-```bash
-npm run dev
-```
+## Contributing
 
-### Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run test` - Run tests
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
+Please read our [Contributing Guidelines](./CONTRIBUTING.md) before submitting pull requests.
 
 ## License
 
-MIT
+MIT License - see [LICENSE](./LICENSE) for details
